@@ -7,6 +7,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:keybinder/keybinder.dart';
+import 'package:saber/components/canvas/double_tap_detector.dart';
 import 'package:saber/components/canvas/hud/canvas_hud.dart';
 import 'package:saber/components/canvas/interactive_canvas.dart';
 import 'package:saber/data/editor/page.dart';
@@ -460,8 +461,37 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
     }
   }
 
+  late final _doubleTapDetector = PassiveDoubleTapDetector(
+    onDoubleTap: _onDoubleTap,
+  );
+
+  /// Resets the zoom to 1.0x when the page is double tapped with a finger,
+  /// unless a finger tap would otherwise draw or edit text.
+  void _onDoubleTap() {
+    if (zoomLockedValue != null) return;
+    if (stows.editorFingerDrawing.value) return;
+    if (widget.isTextEditing()) return;
+    resetZoom();
+  }
+
+  /// Passes finger events to [_doubleTapDetector].
+  void _detectDoubleTap(PointerEvent event) {
+    if (event.kind != .touch) return;
+    switch (event) {
+      case PointerDownEvent():
+        _doubleTapDetector.handlePointerDown(event);
+      case PointerMoveEvent():
+        _doubleTapDetector.handlePointerMove(event);
+      case PointerUpEvent():
+        _doubleTapDetector.handlePointerUp(event);
+      case PointerCancelEvent():
+        _doubleTapDetector.handlePointerCancel(event);
+    }
+  }
+
   void _listenerPointerEvent(PointerEvent event) {
     _trackFingerLongPress(event);
+    _detectDoubleTap(event);
     final isStylus =
         event.kind == PointerDeviceKind.stylus ||
         event.kind == PointerDeviceKind.invertedStylus;
@@ -521,6 +551,7 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
 
   void _listenerPointerUpEvent(PointerEvent event) {
     _trackFingerLongPress(event);
+    _detectDoubleTap(event);
     widget.updatePointerData(event.kind, null);
     if (stylusButtonWasPressed) {
       stylusButtonWasPressed = false;
@@ -538,7 +569,10 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
           onPointerDown: _listenerPointerEvent,
           onPointerMove: _listenerPointerEvent,
           onPointerUp: _listenerPointerUpEvent,
-          onPointerCancel: _trackFingerLongPress,
+          onPointerCancel: (event) {
+            _trackFingerLongPress(event);
+            _detectDoubleTap(event);
+          },
           onPointerHover: _listenerPointerHoverEvent,
           child: GestureDetector(
             child: LayoutBuilder(
