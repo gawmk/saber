@@ -698,6 +698,9 @@ class Translations$settings$prefLabels$en {
 	/// en: 'Auto-disable the eraser'
 	String get disableEraserAfterUse => 'Auto-disable the eraser';
 
+	/// en: 'Pressure eraser'
+	String get pressureEraser => 'Pressure eraser';
+
 	/// en: 'Hide the finger drawing toggle'
 	String get hideFingerDrawingToggle => 'Hide the finger drawing toggle';
 
@@ -754,6 +757,9 @@ class Translations$settings$prefDescriptions$en {
 
 	/// en: 'Automatically switches back to the pen after using the eraser'
 	String get disableEraserAfterUse => 'Automatically switches back to the pen after using the eraser';
+
+	/// en: 'Press and hold the stylus firmly in place to temporarily switch to the eraser'
+	String get pressureEraser => 'Press and hold the stylus firmly in place to temporarily switch to the eraser';
 
 	/// en: 'Larger images will be compressed'
 	String get maxImageSize => 'Larger images will be compressed';

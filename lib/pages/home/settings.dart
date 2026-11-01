@@ -366,6 +366,12 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: FontAwesomeIcons.eraser,
                   pref: stows.disableEraserAfterUse,
                 ),
+                SettingsSwitch(
+                  title: t.settings.prefLabels.pressureEraser,
+                  subtitle: t.settings.prefDescriptions.pressureEraser,
+                  icon: FontAwesomeIcons.eraser,
+                  pref: stows.pressureEraser,
+                ),
                 ValueListenableBuilder(
                   valueListenable: stows.hideFingerDrawingToggle,
                   builder: (context, _, _) {

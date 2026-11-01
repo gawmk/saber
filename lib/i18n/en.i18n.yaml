@@ -116,6 +116,7 @@ settings:
     maxImageSize: Maximum image size
     autoClearWhiteboardOnExit: Auto-clear the whiteboard
     disableEraserAfterUse: Auto-disable the eraser
+    pressureEraser: Pressure eraser
     hideFingerDrawingToggle: Hide the finger drawing toggle
     autoDisableFingerDrawingWhenStylusDetected: Auto-disable finger drawing
     editorPromptRename: Prompt you to rename new notes
@@ -133,6 +134,7 @@ settings:
     preferGreyscale: For e-ink displays
     autoClearWhiteboardOnExit: Clears the whiteboard after you exit the app
     disableEraserAfterUse: Automatically switches back to the pen after using the eraser
+    pressureEraser: Press and hold the stylus firmly in place to temporarily switch to the eraser
     maxImageSize: Larger images will be compressed
     hideFingerDrawing:
       shown: Prevents accidental toggling

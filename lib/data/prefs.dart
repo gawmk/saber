@@ -195,6 +195,14 @@ class Stows {
     false,
     volatile: !_isOnMainIsolate,
   );
+
+  /// Temporarily switch to the eraser when the stylus is
+  /// pressed firmly and held still.
+  final pressureEraser = PlainStow(
+    'pressureEraser',
+    false,
+    volatile: !_isOnMainIsolate,
+  );
   final hideFingerDrawingToggle = PlainStow(
     'hideFingerDrawingToggle',
     false,

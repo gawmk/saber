@@ -181,6 +181,16 @@ class EditorState extends State<Editor> {
   /// If we add customized button bindings, we may have to separate this again.
   var stylusButtonWasPressed = false;
 
+  /// Whether the eraser was temporarily activated during the current draw
+  /// gesture by pressing firmly and holding still (see [stows.pressureEraser]).
+  var pressureEraserActivated = false;
+  var _isPenGestureActive = false;
+  Timer? _pressureEraserTimer;
+  Offset? _pressureHoldAnchor;
+  static const pressureEraserThreshold = 0.85;
+  static const pressureEraserDelay = Duration(milliseconds: 400);
+  static const pressureEraserSlop = 4.0;
+
   @override
   void initState() {
     DynamicMaterialApp.addFullscreenListener(_setState);
@@ -574,6 +584,10 @@ class EditorState extends State<Editor> {
       Select.currentSelect.unselect();
     }
 
+    _isPenGestureActive = currentTool is Pen;
+    _resetPressureHold();
+    _updatePressureEraser();
+
     // setState to let canvas know about currentStroke
     setState(() {});
   }
@@ -658,6 +672,66 @@ class EditorState extends State<Editor> {
     }
     previousPosition = position;
     moveOffset += offset;
+    _updatePressureEraser();
+  }
+
+  void _resetPressureHold() {
+    _pressureEraserTimer?.cancel();
+    _pressureEraserTimer = null;
+    _pressureHoldAnchor = null;
+  }
+
+  /// Starts, continues, or cancels the hold that activates the
+  /// pressure eraser, based on the current pressure and position.
+  void _updatePressureEraser() {
+    final pressure = currentPressure;
+    if (!stows.pressureEraser.value ||
+        !_isPenGestureActive ||
+        coreInfo.readOnly ||
+        currentTool is! Pen ||
+        dragPageIndex == null ||
+        pressure == null ||
+        pressure < pressureEraserThreshold) {
+      _resetPressureHold();
+      return;
+    }
+
+    final anchor = _pressureHoldAnchor;
+    if (anchor != null &&
+        (previousPosition - anchor).distance <= pressureEraserSlop) {
+      return; // still holding
+    }
+
+    // Start (or restart) the hold from the current position
+    _pressureHoldAnchor = previousPosition;
+    _pressureEraserTimer?.cancel();
+    _pressureEraserTimer = Timer(pressureEraserDelay, _activatePressureEraser);
+  }
+
+  void _activatePressureEraser() {
+    _resetPressureHold();
+    if (!mounted) return;
+    if (!_isPenGestureActive || currentTool is! Pen || dragPageIndex == null) {
+      return;
+    }
+
+    // Discard the in-progress pen stroke
+    (currentTool as Pen).onDragEnd();
+
+    pressureEraserActivated = true;
+    final eraser = Eraser();
+    currentTool = eraser;
+
+    final page = coreInfo.pages[dragPageIndex!];
+    for (final stroke in eraser.checkForOverlappingStrokes(
+      previousPosition,
+      page.strokes,
+    )) {
+      page.strokes.remove(stroke);
+    }
+    page.redrawStrokes();
+    removeExcessPages();
+    setState(() {});
   }
 
   bool moveStrokeToPage(Stroke stroke, int pageIndexOrig, int pageIndexDest) {
@@ -731,6 +805,8 @@ class EditorState extends State<Editor> {
   }
 
   void onDrawEnd(ScaleEndDetails details) {
+    _isPenGestureActive = false;
+    _resetPressureHold();
     if (dragPageIndex == null) {
       return;
     }
@@ -753,9 +829,12 @@ class EditorState extends State<Editor> {
         history.recordChange(HistoricAdd(strokes: [newStroke], images: []));
       } else if (currentTool is Eraser) {
         final erased = (currentTool as Eraser).onDragEnd();
-        if (stylusButtonWasPressed || stows.disableEraserAfterUse.value) {
+        if (stylusButtonWasPressed ||
+            pressureEraserActivated ||
+            stows.disableEraserAfterUse.value) {
           // restore previous tool
           stylusButtonWasPressed = false;
+          pressureEraserActivated = false;
           currentTool = _lastNonEraserTool;
         }
         if (erased.isEmpty) return;
@@ -813,6 +892,7 @@ class EditorState extends State<Editor> {
   void updatePointerData(PointerDeviceKind kind, double? pressure) {
     currentPointerKind = kind;
     currentPressure = pressure;
+    _updatePressureEraser();
   }
 
   void onHovering() {
@@ -2108,6 +2188,7 @@ class EditorState extends State<Editor> {
     _delayedSaveTimer?.cancel();
     _watchServerTimer?.cancel();
     _lastSeenPointerCountTimer?.cancel();
+    _pressureEraserTimer?.cancel();
 
     _removeKeybindings();
 
