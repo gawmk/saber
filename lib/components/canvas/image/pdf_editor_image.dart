@@ -11,6 +11,10 @@ class PdfEditorImage extends EditorImage {
   /// that the pdf will be loaded from.
   final File? pdfFile;
 
+  /// The region of the pdf page to show, in the page's natural units
+  /// (see [naturalSize]). If null, the whole page is shown.
+  final Rect? cropRect;
+
   final _pdfDocument = ValueNotifier<PdfDocument?>(null);
 
   static final log = Logger('PdfEditorImage');
@@ -21,6 +25,7 @@ class PdfEditorImage extends EditorImage {
     required this.pdfBytes,
     required this.pdfFile,
     required this.pdfPage,
+    this.cropRect,
     required super.pageIndex,
     required super.pageSize,
     super.invertible,
@@ -72,6 +77,8 @@ class PdfEditorImage extends EditorImage {
       pdfBytes = Uint8List(0);
     }
 
+    final crop = (json['crop'] as List?)?.cast<num>();
+
     int? pdfPage = json['pdfi'];
     if (pdfPage == null) {
       log.warning(
@@ -89,6 +96,14 @@ class PdfEditorImage extends EditorImage {
       pdfBytes: pdfBytes,
       pdfFile: pdfFile,
       pdfPage: pdfPage,
+      cropRect: crop == null
+          ? null
+          : .fromLTWH(
+              crop[0].toDouble(),
+              crop[1].toDouble(),
+              crop[2].toDouble(),
+              crop[3].toDouble(),
+            ),
       pageIndex: json['i'] ?? 0,
       pageSize: .infinite,
       invertible: json['v'] ?? true,
@@ -118,6 +133,9 @@ class PdfEditorImage extends EditorImage {
         ? assets.addFile(pdfFile!)
         : assets.addBytes(pdfBytes!);
     json['pdfi'] = pdfPage;
+    if (cropRect case final crop?) {
+      json['crop'] = [crop.left, crop.top, crop.width, crop.height];
+    }
 
     return json;
   }
@@ -128,9 +146,10 @@ class PdfEditorImage extends EditorImage {
     assert(!naturalSize.isEmpty);
 
     if (dstRect.isEmpty) {
+      final shownSize = cropRect?.size ?? naturalSize;
       final dstSize = pageSize != null
-          ? EditorImage.resize(naturalSize, pageSize!)
-          : naturalSize;
+          ? EditorImage.resize(shownSize, pageSize!)
+          : shownSize;
       dstRect = dstRect.topLeft & dstSize;
     }
 
@@ -178,13 +197,75 @@ class PdfEditorImage extends EditorImage {
         if (pdfDocument == null) {
           return SizedBox.fromSize(size: srcRect.size);
         }
+        final pageView = PdfPageView(
+          document: pdfDocument,
+          // [PdfPageView.pageNumber] starts at 1 not 0
+          pageNumber: pdfPage + 1,
+          decoration: const BoxDecoration(),
+        );
         return InvertWidget(
           invert: invert,
-          child: PdfPageView(
-            document: pdfDocument,
-            // [PdfPageView.pageNumber] starts at 1 not 0
-            pageNumber: pdfPage + 1,
-            decoration: const BoxDecoration(),
+          child: cropRect == null ? pageView : _buildCropped(pageView),
+        );
+      },
+    );
+  }
+
+  /// Maps [region] of a page whose background pdf page has [naturalSize]
+  /// to a [cropRect] for that pdf page.
+  ///
+  /// The background is assumed to be drawn with [fit], centred on a page
+  /// of [pageSize].
+  ///
+  /// Returns the crop in natural units, and the part of [region]
+  /// that the crop covers on the page,
+  /// or null if [region] doesn't overlap the background.
+  static ({Rect crop, Rect onPage})? cropForPageRegion({
+    required Rect region,
+    required Size pageSize,
+    required Size naturalSize,
+    required BoxFit fit,
+  }) {
+    final fittedSizes = applyBoxFit(fit, naturalSize, pageSize);
+    final scaleX = fittedSizes.destination.width / fittedSizes.source.width;
+    final scaleY = fittedSizes.destination.height / fittedSizes.source.height;
+    final pageRect = Offset.zero & pageSize;
+    final drawnRect = Alignment.center.inscribe(
+      Size(naturalSize.width * scaleX, naturalSize.height * scaleY),
+      pageRect,
+    );
+    final onPage = region.intersect(drawnRect).intersect(pageRect);
+    if (onPage.width <= 0 || onPage.height <= 0) return null;
+
+    final shifted = onPage.shift(-drawnRect.topLeft);
+    final crop = Rect.fromLTRB(
+      shifted.left / scaleX,
+      shifted.top / scaleY,
+      shifted.right / scaleX,
+      shifted.bottom / scaleY,
+    );
+    return (crop: crop, onPage: onPage);
+  }
+
+  /// Renders [pageView] at a scale where [cropRect] fills the available
+  /// space, so the cropped region stays as sharp as a full page would be.
+  Widget _buildCropped(Widget pageView) {
+    final crop = cropRect!;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = constraints.maxWidth / crop.width;
+        final scaledSize = naturalSize * scale;
+        return ClipRect(
+          child: OverflowBox(
+            alignment: .topLeft,
+            minWidth: scaledSize.width,
+            maxWidth: scaledSize.width,
+            minHeight: scaledSize.height,
+            maxHeight: scaledSize.height,
+            child: Transform.translate(
+              offset: -crop.topLeft * scale,
+              child: pageView,
+            ),
           ),
         );
       },
@@ -198,6 +279,7 @@ class PdfEditorImage extends EditorImage {
     pdfBytes: pdfBytes,
     pdfPage: pdfPage,
     pdfFile: pdfFile,
+    cropRect: cropRect,
     pageIndex: pageIndex,
     pageSize: .infinite,
     invertible: invertible,
