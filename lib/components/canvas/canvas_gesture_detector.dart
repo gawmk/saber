@@ -29,6 +29,7 @@ class CanvasGestureDetector extends StatefulWidget {
     required this.onHovering,
     required this.onHoveringEnd,
     required this.onStylusButtonChanged,
+    required this.onFingerLongPress,
     required this.undo,
     required this.redo,
     required this.pages,
@@ -55,6 +56,12 @@ class CanvasGestureDetector extends StatefulWidget {
   final VoidCallback onHovering;
   final VoidCallback onHoveringEnd;
   final ValueChanged<bool> onStylusButtonChanged;
+
+  /// Called with the global position of a single finger that was
+  /// held still for [kLongPressTimeout].
+  ///
+  /// Stylus and mouse pointers never trigger this.
+  final ValueChanged<Offset> onFingerLongPress;
 
   final VoidCallback undo;
   final VoidCallback redo;
@@ -418,7 +425,43 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
         transformation;
   }
 
+  final Set<int> _touchPointers = {};
+  Timer? _fingerLongPressTimer;
+  Offset? _fingerLongPressStart;
+
+  void _cancelFingerLongPress() {
+    _fingerLongPressTimer?.cancel();
+    _fingerLongPressTimer = null;
+    _fingerLongPressStart = null;
+  }
+
+  /// Starts or cancels the timer for [CanvasGestureDetector.onFingerLongPress].
+  void _trackFingerLongPress(PointerEvent event) {
+    if (event.kind != .touch) return;
+
+    if (event is PointerDownEvent) {
+      _touchPointers.add(event.pointer);
+      _cancelFingerLongPress();
+      if (_touchPointers.length != 1) return;
+      final start = event.position;
+      _fingerLongPressStart = start;
+      _fingerLongPressTimer = Timer(kLongPressTimeout, () {
+        _cancelFingerLongPress();
+        if (mounted) widget.onFingerLongPress(start);
+      });
+    } else if (event is PointerMoveEvent) {
+      final start = _fingerLongPressStart;
+      if (start != null && (event.position - start).distance > kTouchSlop) {
+        _cancelFingerLongPress();
+      }
+    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      _touchPointers.remove(event.pointer);
+      _cancelFingerLongPress();
+    }
+  }
+
   void _listenerPointerEvent(PointerEvent event) {
+    _trackFingerLongPress(event);
     final isStylus =
         event.kind == PointerDeviceKind.stylus ||
         event.kind == PointerDeviceKind.invertedStylus;
@@ -477,6 +520,7 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
   }
 
   void _listenerPointerUpEvent(PointerEvent event) {
+    _trackFingerLongPress(event);
     widget.updatePointerData(event.kind, null);
     if (stylusButtonWasPressed) {
       stylusButtonWasPressed = false;
@@ -494,6 +538,7 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
           onPointerDown: _listenerPointerEvent,
           onPointerMove: _listenerPointerEvent,
           onPointerUp: _listenerPointerUpEvent,
+          onPointerCancel: _trackFingerLongPress,
           onPointerHover: _listenerPointerHoverEvent,
           child: GestureDetector(
             child: LayoutBuilder(
@@ -574,6 +619,7 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
     widget._transformationController.removeListener(onTransformChanged);
     widget._transformationController.dispose();
     _removeKeybindings();
+    _cancelFingerLongPress();
     super.dispose();
   }
 

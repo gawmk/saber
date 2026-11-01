@@ -55,6 +55,14 @@ import 'package:super_clipboard/super_clipboard.dart';
 
 class const _PhotoInfo(final Uint8List bytes, final String extension);
 
+/// Strokes and images copied by [EditorState.copySelection],
+/// positioned relative to the top-left of a box of [size].
+class const _EditorClipboard(
+  final Size size,
+  final List<Stroke> strokes,
+  final List<EditorImage> images,
+);
+
 class Editor extends StatefulWidget {
   new({super.key, String? path, this.customTitle, this.pdfPath})
     : initialPath = path != null
@@ -842,6 +850,7 @@ class EditorState extends State<Editor> {
         if (moveOffset == .zero) return;
         final select = currentTool as Select;
         if (select.doneSelecting) {
+          if (select.selectResult.isEmpty) return;
           history.recordChange(
             HistoricMove(
               pageIndex: select.selectResult.pageIndex,
@@ -861,7 +870,8 @@ class EditorState extends State<Editor> {
           shouldSave = false;
           select.onDragEnd(page.strokes, page.images);
 
-          if (select.selectResult.isEmpty) {
+          if (select.selectResult.isEmpty &&
+              page.backgroundImage is! PdfEditorImage) {
             Select.currentSelect.unselect();
           }
         }
@@ -1464,6 +1474,168 @@ class EditorState extends State<Editor> {
     await _pickPhotos(photoInfos);
   }
 
+  _EditorClipboard? _clipboard;
+
+  /// Whether [copySelection] has copied something for [pasteClipboard].
+  bool get hasClipboard => _clipboard != null;
+
+  /// Copies the finished [Select] selection for [pasteClipboard].
+  ///
+  /// This includes the selected strokes and images, and the part of the
+  /// page's pdf background within the selection's bounding box.
+  void copySelection() {
+    final select = Select.currentSelect;
+    if (!select.doneSelecting) return;
+    final result = select.selectResult;
+    final page = coreInfo.pages[result.pageIndex];
+    final bounds = result.path.getBounds().intersect(Offset.zero & page.size);
+    if (bounds.width <= 0 || bounds.height <= 0) return;
+    final origin = -bounds.topLeft;
+
+    final images = <EditorImage>[];
+    final background = page.backgroundImage;
+    if (background is PdfEditorImage) {
+      final region = PdfEditorImage.cropForPageRegion(
+        region: bounds,
+        pageSize: page.size,
+        naturalSize: background.naturalSize,
+        fit: background.backgroundFit,
+      );
+      if (region != null) {
+        images.add(
+          PdfEditorImage(
+            id: -1,
+            assetCache: coreInfo.assetCache,
+            pdfBytes: background.pdfBytes,
+            pdfFile: background.pdfFile,
+            pdfPage: background.pdfPage,
+            cropRect: region.crop,
+            pageIndex: result.pageIndex,
+            pageSize: .infinite,
+            invertible: background.invertible,
+            onMoveImage: onMoveImage,
+            onDeleteImage: onDeleteImage,
+            onMiscChange: autosaveAfterDelay,
+            onLoad: () => setState(() {}),
+            dstRect: region.onPage.shift(origin),
+            naturalSize: background.naturalSize,
+          ),
+        );
+      }
+    }
+    for (final image in result.images) {
+      images.add(image.copy()..dstRect = image.dstRect.shift(origin));
+    }
+
+    final strokes = [
+      for (final stroke in result.strokes) stroke.copy()..shift(origin),
+    ];
+    if (strokes.isEmpty && images.isEmpty) return;
+
+    _clipboard = _EditorClipboard(bounds.size, strokes, images);
+  }
+
+  /// Pastes a copy of what [copySelection] copied onto the page at
+  /// [pageIndex], with its top-left at [position], and selects it.
+  ///
+  /// The pasted content is kept within the page where possible.
+  void pasteClipboard(int pageIndex, Offset position) {
+    final clipboard = _clipboard;
+    if (clipboard == null || coreInfo.readOnly) return;
+
+    createPage(pageIndex);
+    final page = coreInfo.pages[pageIndex];
+    final offset = Offset(
+      position.dx.clamp(
+        0.0,
+        (page.size.width - clipboard.size.width).clamp(0.0, double.infinity),
+      ),
+      position.dy.clamp(
+        0.0,
+        (page.size.height - clipboard.size.height).clamp(0.0, double.infinity),
+      ),
+    );
+
+    final strokes = [
+      for (final stroke in clipboard.strokes)
+        stroke.copy()
+          ..pageIndex = pageIndex
+          ..page = page
+          ..shift(offset),
+    ];
+    final images = [
+      for (final image in clipboard.images)
+        image.copy()
+          ..id = coreInfo.nextImageId++
+          ..pageIndex = pageIndex
+          ..dstRect = image.dstRect.shift(offset),
+    ];
+
+    setState(() {
+      strokes.forEach(page.insertStroke);
+      page.images.addAll(images);
+      history.recordChange(HistoricAdd(strokes: strokes, images: images));
+
+      currentTool = Select.currentSelect;
+      Select.currentSelect
+        ..selectResult = SelectResult(
+          pageIndex: pageIndex,
+          strokes: strokes,
+          images: images,
+          path: Path()..addRect(offset & clipboard.size),
+          pageIndexStart: pageIndex,
+        )
+        ..doneSelecting = true;
+    });
+    page.redrawStrokes();
+    autosaveAfterDelay();
+  }
+
+  /// Shows a menu to copy the selection or paste the clipboard
+  /// at [globalPosition], if either is possible there.
+  Future<void> _onFingerLongPress(Offset globalPosition) async {
+    if (coreInfo.readOnly) return;
+    final pageIndex = onWhichPageIsFocalPoint(globalPosition);
+    if (pageIndex == null) return;
+    final position = coreInfo.pages[pageIndex].renderBox!.globalToLocal(
+      globalPosition,
+    );
+
+    final select = Select.currentSelect;
+    final canCopy =
+        currentTool == select &&
+        select.doneSelecting &&
+        select.selectResult.pageIndex == pageIndex &&
+        select.selectResult.path.contains(position);
+    if (!canCopy && !hasClipboard) return;
+
+    if (currentTool is Pen && Pen.currentStroke != null) {
+      (currentTool as Pen).onDragEnd();
+      coreInfo.pages[pageIndex].redrawStrokes();
+    }
+
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final anchor = overlay.globalToLocal(globalPosition);
+    final action = await showMenu<VoidCallback>(
+      context: context,
+      position: .fromRect(anchor & Size.zero, Offset.zero & overlay.size),
+      items: [
+        if (canCopy)
+          PopupMenuItem(
+            value: copySelection,
+            child: Text(t.editor.selectionBar.copy),
+          ),
+        if (hasClipboard)
+          PopupMenuItem(
+            value: () => pasteClipboard(pageIndex, position),
+            child: Text(t.editor.selectionBar.paste),
+          ),
+      ],
+    );
+    action?.call();
+  }
+
   Future exportAsPdf(BuildContext context) async {
     final pdf = await EditorExporter.generatePdf(coreInfo, context);
     final bytes = await pdf.save();
@@ -1540,6 +1712,7 @@ class EditorState extends State<Editor> {
       onHovering: onHovering,
       onHoveringEnd: onHoveringEnd,
       onStylusButtonChanged: onStylusButtonChanged,
+      onFingerLongPress: _onFingerLongPress,
       updatePointerData: updatePointerData,
       undo: undo,
       redo: redo,
@@ -1606,7 +1779,7 @@ class EditorState extends State<Editor> {
           currentTool: currentTool,
           duplicateSelection: () {
             final select = currentTool as Select;
-            if (!select.doneSelecting) return;
+            if (!select.doneSelecting || select.selectResult.isEmpty) return;
 
             setState(() {
               final page = coreInfo.pages[select.selectResult.pageIndex];
@@ -1645,7 +1818,7 @@ class EditorState extends State<Editor> {
           },
           deleteSelection: () {
             final select = currentTool as Select;
-            if (!select.doneSelecting) {
+            if (!select.doneSelecting || select.selectResult.isEmpty) {
               return;
             }
 

@@ -1283,6 +1283,12 @@ class Translations$editor$selectionBar$en {
 
 	/// en: 'Duplicate'
 	String get duplicate => 'Duplicate';
+
+	/// en: 'Copy'
+	String get copy => 'Copy';
+
+	/// en: 'Paste'
+	String get paste => 'Paste';
 }
 
 // Path: editor.menu
