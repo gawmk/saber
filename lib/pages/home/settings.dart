@@ -373,6 +373,52 @@ class _SettingsPageState extends State<SettingsPage> {
                   pref: stows.pressureEraser,
                 ),
                 ValueListenableBuilder(
+                  valueListenable: stows.pressureEraser,
+                  builder: (context, enabled, _) {
+                    if (!enabled) return const SizedBox.shrink();
+                    return Column(
+                      children: [
+                        SettingsSelection(
+                          title: t.settings.prefLabels.pressureEraserThreshold,
+                          subtitle: t
+                              .settings
+                              .prefDescriptions
+                              .pressureEraserThreshold,
+                          icon: Icons.touch_app,
+                          pref: stows.pressureEraserThreshold,
+                          optionsWidth: 80,
+                          options: <ToggleButtonsOption<double>>[
+                            ToggleButtonsOption(
+                              0.7,
+                              Text(t.settings.pressureEraserLight),
+                            ),
+                            ToggleButtonsOption(
+                              0.85,
+                              Text(t.settings.pressureEraserMedium),
+                            ),
+                            ToggleButtonsOption(
+                              0.95,
+                              Text(t.settings.pressureEraserFirm),
+                            ),
+                          ],
+                        ),
+                        SettingsSelection(
+                          title: t.settings.prefLabels.pressureEraserDelay,
+                          subtitle:
+                              t.settings.prefDescriptions.pressureEraserDelay,
+                          icon: Icons.timer,
+                          pref: stows.pressureEraserDelay,
+                          options: const [
+                            ToggleButtonsOption(250, Text('0.25s')),
+                            ToggleButtonsOption(400, Text('0.4s')),
+                            ToggleButtonsOption(700, Text('0.7s')),
+                          ],
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                ValueListenableBuilder(
                   valueListenable: stows.hideFingerDrawingToggle,
                   builder: (context, _, _) {
                     return SettingsSwitch(

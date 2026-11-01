@@ -117,6 +117,8 @@ settings:
     autoClearWhiteboardOnExit: Auto-clear the whiteboard
     disableEraserAfterUse: Auto-disable the eraser
     pressureEraser: Pressure eraser
+    pressureEraserThreshold: Pressure eraser firmness
+    pressureEraserDelay: Pressure eraser hold time
     hideFingerDrawingToggle: Hide the finger drawing toggle
     autoDisableFingerDrawingWhenStylusDetected: Auto-disable finger drawing
     editorPromptRename: Prompt you to rename new notes
@@ -135,6 +137,8 @@ settings:
     autoClearWhiteboardOnExit: Clears the whiteboard after you exit the app
     disableEraserAfterUse: Automatically switches back to the pen after using the eraser
     pressureEraser: Press and hold the stylus firmly in place to temporarily switch to the eraser
+    pressureEraserThreshold: How hard you need to press
+    pressureEraserDelay: How long to hold still before erasing
     maxImageSize: Larger images will be compressed
     hideFingerDrawing:
       shown: Prevents accidental toggling
@@ -181,6 +185,9 @@ settings:
     unsupported: This feature is currently only for developers. Using it will likely result in data loss.
   autosaveDisabled: Never
   shapeRecognitionDisabled: Never
+  pressureEraserLight: Light
+  pressureEraserMedium: Medium
+  pressureEraserFirm: Firm
 logs:
   logs: Logs
   viewLogs: View logs

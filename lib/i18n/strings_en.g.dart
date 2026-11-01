@@ -158,6 +158,15 @@ class Translations$settings$en {
 
 	/// en: 'Never'
 	String get shapeRecognitionDisabled => 'Never';
+
+	/// en: 'Light'
+	String get pressureEraserLight => 'Light';
+
+	/// en: 'Medium'
+	String get pressureEraserMedium => 'Medium';
+
+	/// en: 'Firm'
+	String get pressureEraserFirm => 'Firm';
 }
 
 // Path: logs
@@ -701,6 +710,12 @@ class Translations$settings$prefLabels$en {
 	/// en: 'Pressure eraser'
 	String get pressureEraser => 'Pressure eraser';
 
+	/// en: 'Pressure eraser firmness'
+	String get pressureEraserThreshold => 'Pressure eraser firmness';
+
+	/// en: 'Pressure eraser hold time'
+	String get pressureEraserDelay => 'Pressure eraser hold time';
+
 	/// en: 'Hide the finger drawing toggle'
 	String get hideFingerDrawingToggle => 'Hide the finger drawing toggle';
 
@@ -760,6 +775,12 @@ class Translations$settings$prefDescriptions$en {
 
 	/// en: 'Press and hold the stylus firmly in place to temporarily switch to the eraser'
 	String get pressureEraser => 'Press and hold the stylus firmly in place to temporarily switch to the eraser';
+
+	/// en: 'How hard you need to press'
+	String get pressureEraserThreshold => 'How hard you need to press';
+
+	/// en: 'How long to hold still before erasing'
+	String get pressureEraserDelay => 'How long to hold still before erasing';
 
 	/// en: 'Larger images will be compressed'
 	String get maxImageSize => 'Larger images will be compressed';

@@ -187,8 +187,6 @@ class EditorState extends State<Editor> {
   var _isPenGestureActive = false;
   Timer? _pressureEraserTimer;
   Offset? _pressureHoldAnchor;
-  static const pressureEraserThreshold = 0.85;
-  static const pressureEraserDelay = Duration(milliseconds: 400);
   static const pressureEraserSlop = 4.0;
 
   @override
@@ -691,7 +689,7 @@ class EditorState extends State<Editor> {
         currentTool is! Pen ||
         dragPageIndex == null ||
         pressure == null ||
-        pressure < pressureEraserThreshold) {
+        pressure < stows.pressureEraserThreshold.value) {
       _resetPressureHold();
       return;
     }
@@ -699,13 +697,15 @@ class EditorState extends State<Editor> {
     final anchor = _pressureHoldAnchor;
     if (anchor != null &&
         (previousPosition - anchor).distance <= pressureEraserSlop) {
-      return; // still holding
+      return;
     }
 
-    // Start (or restart) the hold from the current position
     _pressureHoldAnchor = previousPosition;
     _pressureEraserTimer?.cancel();
-    _pressureEraserTimer = Timer(pressureEraserDelay, _activatePressureEraser);
+    _pressureEraserTimer = Timer(
+      Duration(milliseconds: stows.pressureEraserDelay.value),
+      _activatePressureEraser,
+    );
   }
 
   void _activatePressureEraser() {
@@ -715,7 +715,6 @@ class EditorState extends State<Editor> {
       return;
     }
 
-    // Discard the in-progress pen stroke
     (currentTool as Pen).onDragEnd();
 
     pressureEraserActivated = true;

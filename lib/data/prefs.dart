@@ -203,6 +203,21 @@ class Stows {
     false,
     volatile: !_isOnMainIsolate,
   );
+
+  /// The normalized pressure (0 to 1) needed to activate the pressure eraser.
+  final pressureEraserThreshold = PlainStow<double>(
+    'pressureEraserThreshold',
+    0.85,
+    volatile: !_isOnMainIsolate,
+  );
+
+  /// How long (in milliseconds) the stylus must be held still
+  /// to activate the pressure eraser.
+  final pressureEraserDelay = PlainStow(
+    'pressureEraserDelay',
+    400,
+    volatile: !_isOnMainIsolate,
+  );
   final hideFingerDrawingToggle = PlainStow(
     'hideFingerDrawingToggle',
     false,

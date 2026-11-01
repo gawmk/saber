@@ -21,17 +21,25 @@ void main() {
           '$tmpDir/pressureEraser/'
           '${FileManager.appRootDirectoryPrefix}';
       stows.pressureEraser.value = enabled;
+      stows.pressureEraserThreshold.value = 0.85;
+      stows.pressureEraserDelay.value = 400;
       stows.disableEraserAfterUse.value = false;
 
       await tester.pumpWidget(MaterialApp(home: Editor()));
       final state = tester.state<EditorState>(find.byType(Editor));
       addTearDown(state.cancelAutosaveAndMarkSaved);
 
+      for (var i = 0; i < 20; i++) {
+        if (state.coreInfo.pages.firstOrNull?.renderBox != null) break;
+        await tester.runAsync(() => Future.delayed(Duration.zero));
+        await tester.pump();
+      }
+      expect(state.coreInfo.pages.first.renderBox, isNotNull);
+
       state.currentTool = Pen.currentPen;
       return state;
     }
 
-    /// Starts a stylus draw gesture in the middle of the first page.
     Offset startDrawing(EditorState state, double pressure) {
       final page = state.coreInfo.pages[0];
       final focalPoint = page.renderBox!.localToGlobal(
@@ -79,6 +87,33 @@ void main() {
 
       state.onDrawEnd(.new());
       await tester.pump();
+    });
+
+    testWidgets('respects the firmness setting', (tester) async {
+      final state = await setUpEditor(tester, enabled: true);
+      stows.pressureEraserThreshold.value = 0.95;
+
+      startDrawing(state, 0.9);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(state.currentTool, isA<Pen>());
+
+      state.onDrawEnd(.new());
+      await tester.pump();
+    });
+
+    testWidgets('respects the hold time setting', (tester) async {
+      final state = await setUpEditor(tester, enabled: true);
+      stows.pressureEraserDelay.value = 700;
+
+      startDrawing(state, 0.95);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(state.currentTool, isA<Pen>());
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(state.currentTool, isA<Eraser>());
+
+      state.onDrawEnd(.new());
+      await tester.pump();
+      expect(state.currentTool, isA<Pen>());
     });
 
     testWidgets('does nothing when the pen keeps moving', (tester) async {
